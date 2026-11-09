@@ -1,0 +1,9 @@
+Voix : extrait deja utilise pour Swell Reverb, Vocal Lift et Space & Time. AcoustiAngel, Freesound #739037, CC0.
+https://freesound.org/people/AcoustiAngel/sounds/739037/
+Rendu hors ligne par Tools/RenderDemo.cpp avec DelayProcessor, le meme code que le VST3 / Standalone 0.1.0, a 120 BPM.
+Chaque fichier AVANT-APRES : voix seche, pause 0,6 s, meme phrase dans le delay, puis 4 s de repetitions.
+00-DEMO-TOUS-LES-PRESETS : voix seche puis les 8 presets a la suite (3 s de repetitions chacun).
+Mix utilise : Quarter Note 32, Dotted Pong 32, Warm Tape 34, Dub Echo 34, Vocal Throw 38, Rap Doubler 35,
+Space Orbit 34, Lo-Fi Wobble 34. Autres reglages = ceux du preset.
+Dans le depot : 4 de ces fichiers (Quarter Note, Dotted Pong, Dub Echo, Space Orbit). Les autres se regenerent avec DelayDemo.
+Securite : si un fichier depasse -1 dBFS il est baisse (aucun ne l'a ete, pic max -8,8 dBFS).
