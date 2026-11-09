@@ -47,6 +47,7 @@ float write(const juce::File& f, juce::AudioBuffer<float>& buf, double sr) {
 }
 
 int main(int argc, char** argv) {
+    swell::Licence::unlockForTesting(); // rendu hors ligne, sans fichier de licence
     juce::ScopedJuceInitialiser_GUI gui;
     if (argc < 3) { std::cerr << "usage: DelayDemo <voice.wav> <outDir>\n"; return 1; }
     juce::AudioFormatManager fm; fm.registerBasicFormats();

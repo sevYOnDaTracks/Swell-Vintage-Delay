@@ -102,7 +102,10 @@ void DelayProcessor::prepareToPlay(double sr, int block) {
     wetGain.setCurrentAndTargetValue(off ? 0.f : std::min(1.f, 2 * m));
 }
 
-void DelayProcessor::processBlock(juce::AudioBuffer<float>& b, juce::MidiBuffer&) { render(b, false); }
+void DelayProcessor::processBlock(juce::AudioBuffer<float>& b, juce::MidiBuffer&) {
+    if (! licence->isUnlocked()) { b.clear(); return; }
+    render(b, false);
+}
 void DelayProcessor::processBlockBypassed(juce::AudioBuffer<float>& b, juce::MidiBuffer&) { render(b, true); }
 
 void DelayProcessor::render(juce::AudioBuffer<float>& b, bool bypassed) {
@@ -182,5 +185,5 @@ bool DelayProcessor::loadUserPreset(const juce::File& f) {
     return true;
 }
 
-juce::AudioProcessorEditor* DelayProcessor::createEditor() { return new DelayEditor(*this); }
+juce::AudioProcessorEditor* DelayProcessor::createEditor() { return swell::LicenceGuard::attach(new DelayEditor(*this)); }
 juce::AudioProcessor* JUCE_CALLTYPE createPluginFilter() { return new DelayProcessor(); }

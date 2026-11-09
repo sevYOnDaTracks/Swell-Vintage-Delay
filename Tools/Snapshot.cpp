@@ -3,6 +3,7 @@
 // Renders the editor to a PNG: DelaySnapshot <out.png> [preset] [theme 0-4] [colours]
 // The theme and the colour panel are shown only in the picture (saved settings are left alone).
 int main(int argc, char** argv) {
+    swell::Licence::unlockForTesting(); // rendu hors ligne, sans fichier de licence
     juce::ScopedJuceInitialiser_GUI gui;
     DelayProcessor p;
     if (argc > 2) p.loadPreset(juce::String(argv[2]).getIntValue());

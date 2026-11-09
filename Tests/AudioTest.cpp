@@ -47,6 +47,7 @@ void clean(DelayProcessor& p) {
 auto click = [](int n) { return n < 8 ? .5f : 0.f; };
 
 int main() {
+    swell::Licence::unlockForTesting(); // rendu hors ligne, sans fichier de licence
     try {
         juce::ScopedJuceInitialiser_GUI gui;
 

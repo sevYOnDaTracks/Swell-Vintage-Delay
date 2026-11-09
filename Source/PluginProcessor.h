@@ -1,5 +1,6 @@
 #pragma once
 #include <juce_audio_utils/juce_audio_utils.h>
+#include "Licence/SwellLicence.h"
 #include "DelayEngine.h"
 #include "Presets.h"
 
@@ -7,6 +8,9 @@ inline juce::String utf8(const char* s) { return juce::String::fromUTF8(s); }
 
 class DelayProcessor : public juce::AudioProcessor {
 public:
+    // Licence Swell : partagée par toutes les instances ; silence tant que le plugin n'est pas activé.
+    juce::SharedResourcePointer<swell::Licence> licence;
+
     DelayProcessor();
     juce::AudioProcessorValueTreeState state;
     // Read by the editor: host tempo, the delay time in use, and a counter bumped on each input hit.
