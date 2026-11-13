@@ -4,6 +4,19 @@
 
 namespace {
 const juce::Colour ink { 0xfff4f4f2 }, dim { 0xffa6a6a6 }, muted { 0xff6a6a6a }, well { 0xff0f0f10 }, lineDark { 0xff0b0b0c }, offBtn { 0xff141415 };
+// Pixel coordinates in the approved photographic faceplate.
+const juce::Image& rackImage() {
+    static const auto image = juce::ImageFileFormat::loadFrom(BinaryData::vintagerack_png, BinaryData::vintagerack_pngSize);
+    return image;
+}
+void rotateDisc(juce::Graphics& g, juce::Rectangle<float> dest, int cx, int cy, int radius, float radians) {
+    juce::Graphics::ScopedSaveState save(g);
+    juce::Path mask;
+    mask.addEllipse(dest);
+    g.reduceClipRegion(mask);
+    g.addTransform(juce::AffineTransform::rotation(radians, dest.getCentreX(), dest.getCentreY()));
+    g.drawImage(rackImage().getClippedImage({cx-radius, cy-radius, radius*2, radius*2}), dest);
+}
 constexpr float X0 = 34; // left edge of the metal face (after the wooden cheek)
 
 juce::Font uiFont(float size, bool bold = false, float kerning = 0) {
@@ -58,6 +71,10 @@ void DelayLook::setAccent(juce::Colour c) {
 }
 
 void DelayLook::drawRotarySlider(juce::Graphics& g, int x, int y, int w, int h, float pos, float start, float end, juce::Slider& s) {
+    if (photographic && (bool) s.getProperties()["noArc"]) {
+        rotateDisc(g, { (float)x, (float)y, (float)w, (float)h }, 380, 513, 119, start + pos * (end - start));
+        return;
+    }
     vui::knob(g, { (float) x, (float) y, (float) w, (float) h }, pos, start, end, s.getProperties()["small"], s.getProperties()["bipolar"], accent, ! (bool) s.getProperties()["noArc"]);
 }
 
@@ -77,7 +94,13 @@ Knob::Knob(DelayProcessor& p, DelayLook& l, const char* id, juce::String lb, std
     attach = std::make_unique<juce::AudioProcessorValueTreeState::SliderAttachment>(p.state, id, slider);
     if (auto* param = p.state.getParameter(id)) slider.setDoubleClickReturnValue(true, param->convertFrom0to1(param->getDefaultValue()));
 }
+void Knob::setPhotoBounds(juce::Rectangle<int> dial, juce::Rectangle<int> value) {
+    photoDial = dial;
+    photoValue = value;
+    resized();
+}
 void Knob::resized() {
+    if (look.photographic && !photoDial.isEmpty()) { slider.setBounds(photoDial); return; }
     auto r = getLocalBounds();
     if (strip) { r.removeFromTop(22); slider.setBounds(r.withSizeKeepingCentre(std::min(r.getWidth(), r.getHeight()), std::min(r.getWidth(), r.getHeight()))); return; }
     r.removeFromTop(small ? 18 : 34); r.removeFromBottom(small ? 18 : (readout ? 44 : 0));
@@ -86,6 +109,18 @@ void Knob::resized() {
 }
 void Knob::paint(juce::Graphics& g) {
     auto r = getLocalBounds().toFloat();
+    if (look.photographic && !photoDial.isEmpty()) {
+        if (readout && !strip) {
+            g.setColour(juce::Colour(0xff20190f));
+            g.fillRoundedRectangle(photoValue.toFloat(), 2);
+            drawLabel(g, format((float) slider.getValue()), photoValue.toFloat(), 20, look.accent);
+        } else if (strip && slider.isMouseButtonDown()) {
+            auto b = r.removeFromTop(21).reduced(1, 0);
+            g.setColour(well); g.fillRoundedRectangle(b, 3);
+            drawLabel(g, format((float) slider.getValue()), b, 14, look.accent);
+        }
+        return;
+    }
     if (strip) {
         bool live = slider.isMouseButtonDown();
         if (live) vui::glowText(g, format((float) slider.getValue()), r.removeFromTop(22), vui::font(13.5f, true), look.accent);
@@ -138,6 +173,12 @@ void Segmented::mouseDown(const juce::MouseEvent& e) {
 
 //============================================================================== PresetBox
 void PresetBox::paint(juce::Graphics& g) {
+    if (look.photographic) {
+        auto b = getLocalBounds().toFloat().reduced(44, 6);
+        g.setColour(juce::Colour(0xff181613)); g.fillRoundedRectangle(b, 3);
+        drawLabel(g, label, b, 22, juce::Colour(0xffffe9bb));
+        return;
+    }
     auto r = getLocalBounds().toFloat().reduced(1.5f);
     g.setColour(juce::Colours::white.withAlpha(.08f)); g.drawRoundedRectangle(r.translated(0, 1.5f), 5, 1.2f);
     juce::ColourGradient bez(juce::Colour(0xff3a3a3d), 0, r.getY(), juce::Colour(0xff161618), 0, r.getBottom(), false);
@@ -215,6 +256,12 @@ void roller(juce::Graphics& g, juce::Point<float> c, float r) {
 }
 
 void EchoDisplay::paint(juce::Graphics& g) {
+    if (look.photographic) {
+        g.addTransform(juce::AffineTransform::scale(getWidth() / 760.f, getHeight() / 260.f));
+        for (int cx : {978, 1384})
+            rotateDisc(g, {(float)(cx-805-94), 139.f-28-94, 188, 188}, cx, 139, 94, reelAngle);
+        return;
+    }
     auto r = getLocalBounds().toFloat().reduced(.5f);
     // Smoked glass window in a chrome bezel.
     g.setColour(juce::Colours::black.withAlpha(.7f)); g.fillRoundedRectangle(r.translated(0, 2), 9);
@@ -451,6 +498,7 @@ Panel::Panel(DelayProcessor& p) : proc(p) {
     bypass = std::make_unique<Switch>(p, look, "bypass", true);
     for (auto* c : std::initializer_list<juce::Component*> { &timeReadout, &tap, syncSwitch.get(), bypass.get(), &presetBox, &echo, &save, &folder, &advIcon, &settings, &help }) addAndMakeVisible(c);
     addChildComponent(adv);
+    addChildComponent(colours);
     adv.addAndMakeVisible(*modeSeg); adv.addAndMakeVisible(*spaceButton); adv.addAndMakeVisible(*spaceAmount);
     for (auto& k : advKnobs) adv.addAndMakeVisible(*k);
     tap.onClick = [this] { tapTempo(); };
@@ -489,8 +537,11 @@ Panel::~Panel() { setLookAndFeel(nullptr); }
 
 void Panel::applyTheme(const Theme& t, bool persist) {
     theme = t;
+    look.photographic = t.name == Theme::presets()[0].name;
+    tap.photographic = look.photographic;
     look.setAccent(t.accent);
-    renderMetal();
+    if (!look.photographic) renderMetal();
+    if (getWidth() > 0) resized();
     colours.setTheme(t, scale);
     if (persist) {
         props->setValue("theme", t.name); props->setValue("face", t.metal1.toString()); props->setValue("accent", t.accent.toString());
@@ -578,6 +629,34 @@ void Panel::resized() {
     at(*syncSwitch, 704, 508, 26, 44);
     at(*bypass, 841, 509, 40, 40);
     at(adv, 26, 196, 948, 262);
+    if (look.photographic) {
+        // The source image is 1670 x 941. Convert once to the panel coordinate system.
+        auto rect = [](int x, int y, int w, int h) {
+            return juce::Rectangle<float>(x * W / 1670.f, y * H / 941.f, w * W / 1670.f, h * H / 941.f).toNearestInt();
+        };
+        auto placeKnob = [&](Knob& k, int x, int y, int radius, juce::Rectangle<int> display, int top) {
+            auto dial = rect(x-radius, y-radius, 2*radius, 2*radius);
+            auto bounds = dial.getUnion(display.isEmpty() ? dial : display).withTop(rect(0, top, 1, 1).getY());
+            auto origin = bounds.getPosition();
+            k.setBounds(bounds);
+            k.setPhotoBounds(dial-origin, display-origin);
+        };
+        for (auto* k : {divisionKnob.get(), msKnob.get()}) placeKnob(*k, 380, 513, 120, {}, 389);
+        placeKnob(*feedback, 835, 513, 120, rect(755, 656, 162, 35), 389);
+        placeKnob(*mix, 1293, 513, 120, rect(1212, 656, 164, 35), 389);
+        placeKnob(*drive, 226, 842, 46, {}, 743);
+        placeKnob(*tone, 464, 842, 46, {}, 743);
+        placeKnob(*wowKnob, 713, 842, 46, {}, 743);
+        presetBox.setBounds(rect(144, 170, 593, 83));
+        timeReadout.setBounds(rect(223, 647, 314, 55));
+        echo.setBounds(rect(805, 28, 760, 260));
+        tap.setBounds(rect(910, 792, 133, 76));
+        syncSwitch->setBounds(rect(1144, 785, 62, 78));
+        bypass->setBounds(rect(1371, 792, 68, 70));
+    } else {
+        for (auto* k : {divisionKnob.get(), msKnob.get(), feedback.get(), mix.get(), drive.get(), tone.get(), wowKnob.get()})
+            k->setPhotoBounds({}, {});
+    }
     modeSeg->setBounds(24, 46, 330, 32);
     spaceButton->setBounds(24, 112, 120, 34);
     spaceAmount->setBounds(170, 92, 110, 120);
@@ -596,6 +675,16 @@ void AdvancedPanel::paint(juce::Graphics& g) {
 }
 
 void TimeReadout::paint(juce::Graphics& g) {
+    if (look.photographic) {
+        auto window = getLocalBounds().toFloat().reduced(36, 6);
+        g.setColour(juce::Colour(0xff21190f)); g.fillRoundedRectangle(window, 2);
+        if (sub.isEmpty()) drawLabel(g, main, window, 20, look.accent);
+        else {
+            drawLabel(g, main, window.removeFromLeft(window.getWidth() * .50f), 20, look.accent);
+            drawLabel(g, sub, window, 14, look.accent);
+        }
+        return;
+    }
     auto r = getLocalBounds().toFloat().reduced(1);
     g.setColour(juce::Colours::white.withAlpha(.07f)); g.drawRoundedRectangle(r.translated(0, 1), r.getHeight() / 2, 1);
     juce::ColourGradient bez(juce::Colour(0xff36363a), 0, r.getY(), juce::Colour(0xff141416), 0, r.getBottom(), false);
@@ -627,6 +716,10 @@ void TimeReadout::mouseDown(const juce::MouseEvent& e) {
 }
 
 void PushButton::paint(juce::Graphics& g) {
+    if (photographic) {
+        if (down) { g.setColour(juce::Colours::black.withAlpha(.28f)); g.fillRoundedRectangle(getLocalBounds().toFloat().reduced(3), 3); }
+        return;
+    }
     auto r = getLocalBounds().toFloat().reduced(2);
     g.setColour(juce::Colours::black.withAlpha(.6f)); g.fillRoundedRectangle(r.translated(0, down ? 1.f : 3.f), 4);
     if (down) r.translate(0, 1.5f);
@@ -643,6 +736,16 @@ Switch::Switch(DelayProcessor& p, DelayLook& l, const char* id, bool lp)
     attach.sendInitialUpdate();
 }
 void Switch::paint(juce::Graphics& g) {
+    if (look.photographic) {
+        if (lamp && on) {
+            g.setColour(juce::Colours::black.withAlpha(.84f)); g.fillEllipse(getLocalBounds().toFloat().reduced(7));
+        } else if (!lamp && !on) {
+            auto source = rackImage().getClippedImage({1144,785,62,78});
+            g.addTransform(juce::AffineTransform::verticalFlip((float)getHeight()));
+            g.drawImage(source, getLocalBounds().toFloat());
+        }
+        return;
+    }
     auto r = getLocalBounds().toFloat();
     auto c = r.getCentre();
     if (lamp) {
@@ -674,6 +777,17 @@ void Switch::paint(juce::Graphics& g) {
 }
 
 void Panel::paint(juce::Graphics& g) {
+    if (look.photographic) {
+        g.drawImage(rackImage(), getLocalBounds().toFloat());
+        auto area = juce::Rectangle<float>(1239, 809, 98, 34);
+        g.addTransform(juce::AffineTransform::scale(W / 1670.f, H / 941.f));
+        g.setColour(juce::Colour(0xff27231f)); g.fillRoundedRectangle(area, 2);
+        drawLabel(g, juce::String(juce::roundToInt(proc.bpm.load())) + " BPM", area, 20, look.accent);
+        if (proc.value("sync") < .5f) {
+            g.setColour(juce::Colour(0xff362915)); g.fillEllipse(1211.f, 814.f, 26.f, 26.f);
+        }
+        return;
+    }
     g.drawImageAt(woodL, 0, 0); g.drawImageAt(woodR, (int) X0 + 1000, 0);
     g.drawImageAt(metal, (int) X0, 0);
     auto face = juce::Rectangle<float>(X0, 0, 1000, (float) H);
@@ -707,7 +821,7 @@ void Panel::timerCallback() {
     bool sync = proc.value("sync") > .5f;
     divisionKnob->setVisible(sync); msKnob->setVisible(!sync);
     juce::String m = sync ? juce::String(swell::divisions[(size_t) juce::jlimit(0, 17, (int) proc.value("division"))].name) : ms(proc.value("time"));
-    juce::String sb = sync ? ms(proc.delaySeconds.load() * 1000) : juce::String();
+    juce::String sb = sync ? ms(1000 * DelayProcessor::delayTimeFor(true, (int)proc.value("division"), 0, proc.bpm.load())) : juce::String();
     if (m != timeReadout.main || sb != timeReadout.sub) { timeReadout.main = m; timeReadout.sub = sb; timeReadout.repaint(); }
     juce::String h = juce::String((int) sync) + juce::String(juce::roundToInt(proc.bpm.load()));
     if (h != hint) { hint = h; repaint((int) X0 + 640, 505, 190, 50); }

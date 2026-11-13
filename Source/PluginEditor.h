@@ -13,6 +13,7 @@ class DelayLook : public juce::LookAndFeel_V4 {
 public:
     DelayLook();
     juce::Colour accent { 0xffa9d6ff };
+    bool photographic = true;
     void setAccent(juce::Colour);
     void drawRotarySlider(juce::Graphics&, int, int, int, int, float, float, float, juce::Slider&) override;
 };
@@ -24,9 +25,11 @@ public:
     void resized() override;
     void paint(juce::Graphics&) override;
     juce::Slider slider;
+    void setPhotoBounds(juce::Rectangle<int> dial, juce::Rectangle<int> value);
     bool readout = true, strip = false; // strip: label only, value shown while touched
 private:
     DelayLook& look;
+    juce::Rectangle<int> photoDial, photoValue;
     juce::String label;
     std::function<juce::String(float)> format;
     bool small;
@@ -109,6 +112,7 @@ class PushButton : public juce::Component {
 public:
     explicit PushButton(juce::String t) : text(std::move(t)) { setMouseCursor(juce::MouseCursor::PointingHandCursor); }
     std::function<void()> onClick;
+    bool photographic = false;
     void paint(juce::Graphics&) override;
     void mouseDown(const juce::MouseEvent&) override { down = true; repaint(); if (onClick) onClick(); }
     void mouseUp(const juce::MouseEvent&) override { down = false; repaint(); }

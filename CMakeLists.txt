@@ -20,7 +20,7 @@ if(APPLE)
 endif()
 # Never change PLUGIN_CODE / BUNDLE_ID once released: saved DAW sessions would lose the plugin.
 juce_add_plugin(SwellDelay COMPANY_NAME "Swell-audio" BUNDLE_ID "fr.swell-audio.delay" PLUGIN_MANUFACTURER_CODE Swel PLUGIN_CODE Sdly FORMATS ${DELAY_FORMATS} PRODUCT_NAME "Swell Delay" IS_SYNTH FALSE NEEDS_MIDI_INPUT FALSE NEEDS_MIDI_OUTPUT FALSE COPY_PLUGIN_AFTER_BUILD FALSE)
-juce_add_binary_data(DelayAssets SOURCES swell-mark.png)
+juce_add_binary_data(DelayAssets SOURCES swell-mark.png vintage-rack.png)
 target_sources(SwellDelay PRIVATE Source/PluginProcessor.cpp Source/PluginEditor.cpp Source/Licence/SwellLicence.cpp)
 target_compile_definitions(SwellDelay PUBLIC JUCE_WEB_BROWSER=0 JUCE_USE_CURL=0 JUCE_VST3_CAN_REPLACE_VST2=0)
 target_link_libraries(SwellDelay PRIVATE monocypher juce::juce_cryptography DelayAssets juce::juce_audio_utils juce::juce_dsp PUBLIC juce::juce_recommended_config_flags)
