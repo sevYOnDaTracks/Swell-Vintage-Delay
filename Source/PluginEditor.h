@@ -6,7 +6,7 @@ struct Theme {
     juce::String name;
     juce::Colour metal1, metal2, metal3, accent;
     static Theme custom(juce::Colour face, juce::Colour accent);
-    static const std::array<Theme, 5>& presets();
+    static const std::array<Theme, 6>& presets();
 };
 
 class DelayLook : public juce::LookAndFeel_V4 {
@@ -66,11 +66,14 @@ public:
     EchoDisplay(DelayProcessor& p, DelayLook& l) : proc(p), look(l) {}
     void paint(juce::Graphics&) override;
     void tick();
+    static inline double filmClock = -1; // set by the video tool to drive the animation offline
+    static double clock() { return filmClock >= 0 ? filmClock : juce::Time::getMillisecondCounterHiRes() / 1000; }
 private:
     DelayProcessor& proc;
     DelayLook& look;
     int lastOnsets = -1;
-    double hitTime = -100;
+    double hitTime = -100, lastTick = 0;
+    float reelAngle = 0;
 };
 
 class IconButton : public juce::Component {
@@ -109,7 +112,7 @@ private:
     void changeListenerCallback(juce::ChangeBroadcaster*) override;
 };
 
-// Everything at the 1068 x 570 design size; the editor scales it.
+// Everything at the 1068 x 646 design size; the editor scales it.
 class Panel : public juce::Component, private juce::Timer {
 public:
     explicit Panel(DelayProcessor&);
@@ -121,7 +124,8 @@ public:
     void applyTheme(const Theme&, bool save);
     void setScaleShown(float s);
     void showColours(bool);
-    static constexpr int W = 1068, H = 570;
+    void filmTick() { timerCallback(); }
+    static constexpr int W = 1068, H = 646;
 private:
     DelayProcessor& proc;
     DelayLook look;

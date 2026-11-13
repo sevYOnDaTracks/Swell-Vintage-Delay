@@ -1,6 +1,6 @@
 #include "../Source/PluginProcessor.h"
 #include "../Source/PluginEditor.h"
-// Renders the editor to a PNG: DelaySnapshot <out.png> [preset] [theme 0-4] [colours]
+// Renders the editor to a PNG: DelaySnapshot <out.png> [preset] [theme 0-5] [colours]
 // The theme and the colour panel are shown only in the picture (saved settings are left alone).
 int main(int argc, char** argv) {
     swell::Licence::unlockForTesting(); // rendu hors ligne, sans fichier de licence
@@ -19,7 +19,7 @@ int main(int argc, char** argv) {
     e->setSize(Panel::W, Panel::H);
     if (auto* panel = dynamic_cast<Panel*>(e->getChildComponent(0))) {
         panel->setScaleShown(1);
-        if (argc > 3) panel->applyTheme(Theme::presets()[(size_t) juce::jlimit(0, 4, juce::String(argv[3]).getIntValue())], false);
+        if (argc > 3) panel->applyTheme(Theme::presets()[(size_t) juce::jlimit(0, 5, juce::String(argv[3]).getIntValue())], false);
         if (argc > 4) panel->showColours(true);
     }
     e->resized();

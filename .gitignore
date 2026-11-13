@@ -7,3 +7,5 @@ boutique/
 Demo/renders/
 maquette/
 dist-licence/
+build-mac/
+._*
