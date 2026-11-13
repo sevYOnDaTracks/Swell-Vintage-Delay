@@ -4,8 +4,8 @@
 #include <juce_gui_basics/juce_gui_basics.h>
 
 namespace vui {
-inline const juce::Colour cream { 0xffeadfc6 }, creamDim { 0xffa89f8c }, amber { 0xffffb547 }, amberDim { 0xff5a3a12 },
-                          lcdBg { 0xff120c06 }, faceTop { 0xff26252a }, faceBottom { 0xff151417 };
+inline const juce::Colour cream { 0xfff4f4f2 }, creamDim { 0xffa6a6a6 }, amber { 0xffffb547 }, amberDim { 0xff5a3a12 },
+                          lcdBg { 0xff120c06 }, faceTop { 0xff2a2a2a }, faceBottom { 0xff141414 };
 
 inline juce::Font font(float size, bool bold = false, float kerning = 0) {
 #if JUCE_WINDOWS
@@ -142,7 +142,7 @@ inline void knob(juce::Graphics& g, juce::Rectangle<float> r, float pos, float s
 }
 
 // Dark brushed face with a faint warm vignette.
-inline juce::Image brushedFace(int w, int h, juce::Colour top = faceTop, juce::Colour mid = juce::Colour(0xff1d1c20), juce::Colour bottom = faceBottom) {
+inline juce::Image brushedFace(int w, int h, juce::Colour top = faceTop, juce::Colour mid = juce::Colour(0xff1e1e1e), juce::Colour bottom = faceBottom) {
     juce::Image img(juce::Image::RGB, w, h, true);
     juce::Graphics g(img);
     juce::ColourGradient grad(top, 0, 0, bottom, 0, (float) h, false);

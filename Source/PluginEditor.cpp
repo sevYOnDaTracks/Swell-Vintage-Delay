@@ -3,7 +3,7 @@
 #include "VintageUI.h"
 
 namespace {
-const juce::Colour ink { 0xffeadfc6 }, dim { 0xffa89f8c }, muted { 0xff6e675a }, well { 0xff0f0f10 }, lineDark { 0xff0b0b0c }, offBtn { 0xff141415 };
+const juce::Colour ink { 0xfff4f4f2 }, dim { 0xffa6a6a6 }, muted { 0xff6a6a6a }, well { 0xff0f0f10 }, lineDark { 0xff0b0b0c }, offBtn { 0xff141415 };
 constexpr float X0 = 34; // left edge of the metal face (after the wooden cheek)
 
 juce::Font uiFont(float size, bool bold = false, float kerning = 0) {
@@ -36,7 +36,7 @@ Theme Theme::custom(juce::Colour face, juce::Colour accent) {
 }
 const std::array<Theme, 6>& Theme::presets() {
     static const std::array<Theme, 6> list {{
-        { "Vintage",                           juce::Colour(0xff29282c), juce::Colour(0xff1e1d21), juce::Colour(0xff141316), juce::Colour(0xffffb547) },
+        { "Vintage",                           juce::Colour(0xff2a2a2a), juce::Colour(0xff1e1e1e), juce::Colour(0xff141414), juce::Colour(0xffffb547) },
         { "Bleu nuit",                         juce::Colour(0xff232d3b), juce::Colour(0xff1a2230), juce::Colour(0xff121924), juce::Colour(0xffa9d6ff) },
         { "Vert anglais",                      juce::Colour(0xff223029), juce::Colour(0xff19241f), juce::Colour(0xff111a16), juce::Colour(0xffe8dcc0) },
         { "Bordeaux",                          juce::Colour(0xff32202a), juce::Colour(0xff271820), juce::Colour(0xff1b1016), juce::Colour(0xfff2d8b0) },
@@ -682,11 +682,7 @@ void Panel::paint(juce::Graphics& g) {
     drawLabel(g, "SWELL", { X0 + 116, 34, 140, 28 }, 27, ink, juce::Justification::centredLeft, .06f, true);
     drawLabel(g, "A U D I O", { X0 + 118, 62, 140, 16 }, 12.5f, ink, juce::Justification::centredLeft, .3f);
     g.setColour(ink.withAlpha(.6f)); g.fillRect(X0 + 228, 30.f, 1.5f, 52.f);
-    {
-        juce::Graphics::ScopedSaveState ss(g);
-        g.addTransform(juce::AffineTransform::scale(.62f, 1).translated(X0 + 250, 0));
-        drawLabel(g, "VINTAGE DELAY", { 0, 26, 520, 56 }, 50, ink, juce::Justification::centredLeft, .02f, true);
-    }
+    drawLabel(g, "VINTAGE DELAY", { X0 + 248, 30, 232, 52 }, 23, ink, juce::Justification::centredLeft, .1f, true);
     // Lower strip.
     g.setColour(juce::Colours::black.withAlpha(.32f)); g.fillRect(X0, stripY, 1000.f, (float) H - stripY);
     g.setColour(lineDark); g.fillRect(X0, stripY - 1, 1000.f, 2.f);
