@@ -58,7 +58,7 @@ void DelayLook::setAccent(juce::Colour c) {
 }
 
 void DelayLook::drawRotarySlider(juce::Graphics& g, int x, int y, int w, int h, float pos, float start, float end, juce::Slider& s) {
-    vui::knob(g, { (float) x, (float) y, (float) w, (float) h }, pos, start, end, s.getProperties()["small"], s.getProperties()["bipolar"], accent);
+    vui::knob(g, { (float) x, (float) y, (float) w, (float) h }, pos, start, end, s.getProperties()["small"], s.getProperties()["bipolar"], accent, ! (bool) s.getProperties()["noArc"]);
 }
 
 //============================================================================== Knob
@@ -72,27 +72,36 @@ Knob::Knob(DelayProcessor& p, DelayLook& l, const char* id, juce::String lb, std
     slider.getProperties().set("small", small);
     slider.getProperties().set("bipolar", juce::String(id) == "offset");
     slider.onValueChange = [this] { repaint(); };
+    slider.onDragStart = [this] { repaint(); }; slider.onDragEnd = [this] { repaint(); };
     addAndMakeVisible(slider);
     attach = std::make_unique<juce::AudioProcessorValueTreeState::SliderAttachment>(p.state, id, slider);
     if (auto* param = p.state.getParameter(id)) slider.setDoubleClickReturnValue(true, param->convertFrom0to1(param->getDefaultValue()));
 }
 void Knob::resized() {
     auto r = getLocalBounds();
-    r.removeFromTop(small ? 18 : 30); r.removeFromBottom(small ? 18 : 40);
+    if (strip) { r.removeFromTop(22); slider.setBounds(r.withSizeKeepingCentre(std::min(r.getWidth(), r.getHeight()), std::min(r.getWidth(), r.getHeight()))); return; }
+    r.removeFromTop(small ? 18 : 34); r.removeFromBottom(small ? 18 : (readout ? 44 : 0));
     int s = std::min(r.getWidth(), r.getHeight());
     slider.setBounds(r.withSizeKeepingCentre(s, s));
 }
 void Knob::paint(juce::Graphics& g) {
     auto r = getLocalBounds().toFloat();
+    if (strip) {
+        bool live = slider.isMouseButtonDown();
+        if (live) vui::glowText(g, format((float) slider.getValue()), r.removeFromTop(22), vui::font(13.5f, true), look.accent);
+        else drawLabel(g, label.toUpperCase(), r.removeFromTop(22), 14, ink, juce::Justification::centred, .06f, true);
+        return;
+    }
     if (small) {
         drawLabel(g, label, r.removeFromTop(18), 12.5f, ink);
         vui::glowText(g, format((float) slider.getValue()), r.removeFromBottom(18), vui::font(12.5f), look.accent);
         return;
     }
-    drawLabel(g, label.toUpperCase(), r.removeFromTop(30), 21, ink, juce::Justification::centred, .14f, true);
-    auto box = r.removeFromBottom(40).withSizeKeepingCentre(std::min(150.f, r.getWidth() - 10), 30);
+    drawLabel(g, label.toUpperCase(), r.removeFromTop(34), 24, ink, juce::Justification::centred, .12f, true);
+    if (! readout) return;
+    auto box = r.removeFromBottom(32).withSizeKeepingCentre(std::min(114.f, r.getWidth() - 10), 30);
     vui::lcd(g, box);
-    vui::glowText(g, format((float) slider.getValue()), box, vui::mono(17), look.accent);
+    vui::glowText(g, format((float) slider.getValue()), box, vui::font(19), look.accent);
 }
 
 //============================================================================== Segmented
@@ -128,7 +137,23 @@ void Segmented::mouseDown(const juce::MouseEvent& e) {
 }
 
 //============================================================================== PresetBox
-void PresetBox::paint(juce::Graphics& g) { vui::presetDisplay(g, getLocalBounds().toFloat().reduced(.5f), label, look.accent); }
+void PresetBox::paint(juce::Graphics& g) {
+    auto r = getLocalBounds().toFloat().reduced(1.5f);
+    g.setColour(juce::Colours::white.withAlpha(.08f)); g.drawRoundedRectangle(r.translated(0, 1.5f), 5, 1.2f);
+    juce::ColourGradient bez(juce::Colour(0xff3a3a3d), 0, r.getY(), juce::Colour(0xff161618), 0, r.getBottom(), false);
+    g.setGradientFill(bez); g.fillRoundedRectangle(r, 5);
+    auto in = r.reduced(4);
+    juce::ColourGradient bg(juce::Colour(0xff070707), 0, in.getY(), juce::Colour(0xff141415), 0, in.getBottom(), false);
+    g.setGradientFill(bg); g.fillRoundedRectangle(in, 3);
+    g.setColour(juce::Colours::black); g.drawRoundedRectangle(in, 3, 1);
+    auto chevron = [&](float cx, bool right) {
+        juce::Path p; float d = right ? 1.f : -1.f, cy = in.getCentreY();
+        p.startNewSubPath(cx - 3.5f * d, cy - 7); p.lineTo(cx + 3.5f * d, cy); p.lineTo(cx - 3.5f * d, cy + 7);
+        g.setColour(ink); g.strokePath(p, juce::PathStrokeType(1.8f, juce::PathStrokeType::mitered, juce::PathStrokeType::rounded));
+    };
+    chevron(in.getX() + 30, false); chevron(in.getRight() - 30, true);
+    drawLabel(g, label, in.reduced(48, 0), 21, ink);
+}
 void PresetBox::mouseDown(const juce::MouseEvent& e) {
     if (e.x < 34) { if (onPrev) onPrev(); }
     else if (e.x > getWidth() - 34) { if (onNext) onNext(); }
@@ -305,6 +330,13 @@ void IconButton::paint(juce::Graphics& g) {
                 p.startNewSubPath(P(12 + 6 * c, 12 + 6 * sn)); p.lineTo(P(12 + 9.5f * c, 12 + 9.5f * sn));
             }
             break;
+        case Advanced:
+            for (int i = 0; i < 3; ++i) {
+                float y = 6.f + (float) i * 6, kx = i == 1 ? 15.f : 9.f;
+                p.startNewSubPath(P(4, y)); p.lineTo(P(20, y));
+                p.addEllipse(P(kx - 2, y - 2).x, P(kx - 2, y - 2).y, 4 * s, 4 * s);
+            }
+            break;
         case Help:
             p.addEllipse(P(3, 3).x, P(3, 3).y, 18 * s, 18 * s);
             p.startNewSubPath(P(9.5f, 9.5f)); p.cubicTo(P(9.5f, 6.5f), P(14.5f, 6.5f), P(14.5f, 9.5f)); p.cubicTo(P(14.5f, 11.5f), P(12, 11.5f), P(12, 14));
@@ -402,28 +434,33 @@ Panel::Panel(DelayProcessor& p) : proc(p) {
     mix = knob("mix", "Mix", pct, false);
     spaceAmount = knob("spaceAmount", "Amount", pct, true);
     advKnobs.push_back(knob("lowCut", "Low Cut", hz, true));
-    advKnobs.push_back(knob("highCut", "High Cut", hz, true));
-    advKnobs.push_back(knob("wow", "Wow", pct, true));
     advKnobs.push_back(knob("flutter", "Flutter", pct, true));
-    advKnobs.push_back(knob("saturation", "Saturation", pct, true));
-    advKnobs.push_back(knob("duck", "Amount", [](float v) { return v < .5f ? juce::String("Off") : pct(v); }, true));
+    advKnobs.push_back(knob("duck", "Ducking", [](float v) { return v < .5f ? juce::String("Off") : pct(v); }, true));
     advKnobs.push_back(knob("duckRelease", "Release", ms, true));
     advKnobs.push_back(knob("width", "Width", pct, true));
     advKnobs.push_back(knob("offset", "Offset R", [](float v) { int i = juce::roundToInt(v); return (i > 0 ? "+" : "") + juce::String(i) + " ms"; }, true));
+    drive = knob("saturation", "Drive", pct, true); drive->strip = true;
+    tone = knob("highCut", "Tone", hz, true); tone->strip = true;
+    wowKnob = knob("wow", "Wow / Flutter", pct, true); wowKnob->strip = true;
+    for (auto* k : { divisionKnob.get(), msKnob.get(), feedback.get(), mix.get(), drive.get(), tone.get(), wowKnob.get() }) k->slider.getProperties().set("noArc", true);
+    divisionKnob->readout = msKnob->readout = false;
 
-    syncSeg = std::make_unique<Segmented>(p, look, "sync", juce::StringArray { "SYNC", "MS" }, std::vector<float> { 1, 0 }, 0.f);
     modeSeg = std::make_unique<Segmented>(p, look, "mode", juce::StringArray { "MONO", juce::String::fromUTF8("ST\xc3\x89R\xc3\x89O"), "PING-PONG" }, std::vector<float> { 0, 1, 2 }, 8.f);
     spaceButton = std::make_unique<Segmented>(p, look, "space", juce::StringArray { "SPACE" }, std::vector<float> { 1 }, 0.f, true, 12.5f);
-    for (auto* c : std::initializer_list<juce::Component*> { syncSeg.get(), modeSeg.get(), spaceButton.get(), &categoryBox, &presetBox, &echo, &save, &folder, &settings, &help }) addAndMakeVisible(c);
-    addChildComponent(colours);
-
-    categoryBox.onPrev = [this] { stepCategory(-1); }; categoryBox.onNext = [this] { stepCategory(1); }; categoryBox.onMenu = [this] { categoryMenu(); };
+    syncSwitch = std::make_unique<Switch>(p, look, "sync", false);
+    bypass = std::make_unique<Switch>(p, look, "bypass", true);
+    for (auto* c : std::initializer_list<juce::Component*> { &timeReadout, &tap, syncSwitch.get(), bypass.get(), &presetBox, &echo, &save, &folder, &advIcon, &settings, &help }) addAndMakeVisible(c);
+    addChildComponent(adv);
+    adv.addAndMakeVisible(*modeSeg); adv.addAndMakeVisible(*spaceButton); adv.addAndMakeVisible(*spaceAmount);
+    for (auto& k : advKnobs) adv.addAndMakeVisible(*k);
+    tap.onClick = [this] { tapTempo(); };
+    advIcon.onClick = [this] { showAdvanced(! adv.isVisible()); };
     presetBox.onPrev = [this] { stepPreset(-1); }; presetBox.onNext = [this] { stepPreset(1); }; presetBox.onMenu = [this] { presetMenu(); };
     save.onClick = [this] { savePreset(); }; folder.onClick = [this] { folderMenu(); };
     settings.onClick = [this] { showColours(!colours.isVisible()); };
     help.onClick = [] {
         juce::AlertWindow::showMessageBoxAsync(juce::MessageBoxIconType::NoIcon, "Swell Delay",
-            juce::String::fromUTF8("Vintage Delay - version 0.2\nSwell Audio, by @sevyondatracks\n\n"
+            juce::String::fromUTF8("Vintage Delay - version 0.2.1\nSwell Audio, by @sevyondatracks\n\n"
                                    "SYNC : le delay suit le tempo du morceau. MS : temps libre.\n"
                                    "SPACE : chaque r\xc3\xa9p\xc3\xa9tition part \xc3\xa0 un endroit diff\xc3\xa9rent.\n"
                                    "Roue crant\xc3\xa9" "e : couleur et taille de l'interface.\n\n"
@@ -469,7 +506,23 @@ void Panel::showColours(bool show) {
     if (show) colours.toFront(false);
     settings.active = show; settings.repaint();
 }
-void Panel::mouseDown(const juce::MouseEvent&) { if (colours.isVisible()) showColours(false); }
+void Panel::mouseDown(const juce::MouseEvent&) { if (colours.isVisible()) showColours(false); if (adv.isVisible()) showAdvanced(false); }
+void Panel::showAdvanced(bool show) {
+    if (show) showColours(false);
+    adv.setVisible(show);
+    if (show) adv.toFront(false);
+    advIcon.active = show; advIcon.repaint();
+}
+void Panel::tapTempo() {
+    const double now = juce::Time::getMillisecondCounterHiRes() / 1000;
+    if (! taps.empty() && now - taps.back() > 2) taps.clear();
+    taps.push_back(now);
+    if (taps.size() > 5) taps.erase(taps.begin());
+    if (taps.size() < 2) return;
+    const double avg = (taps.back() - taps.front()) / (double) (taps.size() - 1);
+    auto set = [this](const char* id, float v) { if (auto* prm = proc.state.getParameter(id)) prm->setValueNotifyingHost(prm->convertTo0to1(v)); };
+    set("sync", 0); set("time", juce::jlimit(1.f, 2000.f, (float) (avg * 1000)));
+}
 
 void Panel::renderWood() {
     auto makeWood = [](int seed) {
@@ -504,68 +557,164 @@ void Panel::renderMetal() {
     metal = vui::brushedFace(1000, H, theme.metal1, theme.metal2, theme.metal3);
 }
 
-namespace { constexpr float advY = 494, advH = 136, stripY = 448; const int weights[4] { 2, 3, 2, 2 }; }
+namespace { constexpr float stripY = 466; }
 
 void Panel::resized() {
-    const int x0 = (int) X0;
-    categoryBox.setBounds(x0 + 40, 78, 400, 42);
-    presetBox.setBounds(x0 + 40, 128, 400, 42);
-    modeSeg->setBounds(x0 + 40, 182, 400, 32);
-    echo.setBounds(x0 + 470, 72, 500, 150);
-    divisionKnob->setBounds(x0 + 50, 230, 210, 192);
-    msKnob->setBounds(x0 + 50, 230, 210, 192);
-    syncSeg->setBounds(x0 + 75, 418, 160, 26);
-    feedback->setBounds(x0 + 320, 230, 210, 192);
-    mix->setBounds(x0 + 590, 230, 210, 192);
-    spaceButton->setBounds(x0 + 838, 262, 120, 34);
-    spaceAmount->setBounds(x0 + 846, 300, 104, 120);
-    int x = x0 + 1000 - 32;
-    for (auto* b : { &help, &settings, &folder, &save }) { x -= 30; b->setBounds(x, 18, 22, 22); }
-    float unit = (940 - 42) / 9.f, gx = X0 + 30;
-    int k = 0;
-    for (int gi = 0; gi < 4; ++gi) {
-        float gw = unit * (float) weights[gi], kw = (gw - 12) / (float) weights[gi];
-        for (int j = 0; j < weights[gi]; ++j) advKnobs[(size_t) k++]->setBounds(juce::roundToInt(gx + 6 + kw * (float) j), (int) advY + 30, juce::roundToInt(kw), 104);
-        gx += gw + 14;
+    const float x0 = X0;
+    auto at = [&](juce::Component& c, float x, float y, float w, float h) { c.setBounds(juce::roundToInt(x0 + x), juce::roundToInt(y), juce::roundToInt(w), juce::roundToInt(h)); };
+    at(presetBox, 61, 108, 376, 54);
+    at(echo, 481, 18, 484, 166);
+    int ix = (int) x0 + 437;
+    for (auto* b : { &help, &settings, &advIcon, &folder, &save }) { ix -= 26; b->setBounds(ix, 170, 22, 22); }
+    at(*divisionKnob, 109, 192, 200, 210);
+    at(*msKnob, 109, 192, 200, 210);
+    at(timeReadout, 110, 412, 198, 34);
+    at(*feedback, 400, 192, 200, 254);
+    at(*mix, 691, 192, 200, 254);
+    at(*drive, 70, 474, 80, 104);
+    at(*tone, 223, 474, 80, 104);
+    at(*wowKnob, 343, 474, 120, 104);
+    at(tap, 552, 510, 74, 40);
+    at(*syncSwitch, 704, 508, 26, 44);
+    at(*bypass, 841, 509, 40, 40);
+    at(adv, 26, 196, 948, 262);
+    modeSeg->setBounds(24, 46, 330, 32);
+    spaceButton->setBounds(24, 112, 120, 34);
+    spaceAmount->setBounds(170, 92, 110, 120);
+    for (int k = 0; k < 6; ++k) advKnobs[(size_t) k]->setBounds(380 + k * 94, 70, 90, 120);
+    colours.setBounds((int) x0 + 1000 - 22 - 300, 50, 300, 398);
+}
+
+void AdvancedPanel::paint(juce::Graphics& g) {
+    auto r = getLocalBounds().toFloat();
+    g.setColour(juce::Colours::black.withAlpha(.55f)); g.fillRoundedRectangle(r.translated(0, 6).reduced(2), 8);
+    g.setColour(juce::Colour(0xf2151517)); g.fillRoundedRectangle(r, 8);
+    g.setColour(juce::Colours::white.withAlpha(.08f)); g.drawRoundedRectangle(r.reduced(.5f), 8, 1);
+    drawLabel(g, juce::String::fromUTF8("R\xc3\x89GLAGES AVANC\xc3\x89S"), { 24, 14, 300, 20 }, 12.5f, ink, juce::Justification::centredLeft, .2f, true);
+    drawLabel(g, "FILTRE  /  BANDE  /  DUCKING  /  STEREO", { 380, 40, 564, 20 }, 11, dim, juce::Justification::centred, .2f);
+    g.setColour(juce::Colours::white.withAlpha(.06f)); g.drawVerticalLine(360, 40, r.getBottom() - 24);
+}
+
+void TimeReadout::paint(juce::Graphics& g) {
+    auto r = getLocalBounds().toFloat().reduced(1);
+    g.setColour(juce::Colours::white.withAlpha(.07f)); g.drawRoundedRectangle(r.translated(0, 1), r.getHeight() / 2, 1);
+    juce::ColourGradient bez(juce::Colour(0xff36363a), 0, r.getY(), juce::Colour(0xff141416), 0, r.getBottom(), false);
+    g.setGradientFill(bez); g.fillRoundedRectangle(r, r.getHeight() / 2);
+    g.setColour(juce::Colours::black); g.drawRoundedRectangle(r, r.getHeight() / 2, 1);
+    auto in = r.reduced(4);
+    auto lb = in.removeFromLeft(30), rb = in.removeFromRight(30);
+    for (auto b : { lb, rb }) {
+        vui::raised(g, b.reduced(1), false, 5);
+        juce::Path t; float cx = b.getCentreX(), cy = b.getCentreY(), d = b == lb ? -1.f : 1.f;
+        t.addTriangle(cx + 5 * d, cy, cx - 4 * d, cy - 6, cx - 4 * d, cy + 6);
+        g.setColour(ink); g.fillPath(t);
     }
-    colours.setBounds(x0 + 1000 - 22 - 300, 50, 300, 398);
+    auto win = in.reduced(3, 0);
+    vui::lcd(g, win, 3);
+    if (sub.isEmpty()) { vui::glowText(g, main, win, vui::mono(17), look.accent); return; }
+    auto mf = vui::font(19), sf = vui::font(13);
+    float mw = juce::GlyphArrangement::getStringWidth(mf, main), sw = juce::GlyphArrangement::getStringWidth(sf, sub), x = win.getCentreX() - (mw + 14 + sw) / 2;
+    vui::glowText(g, main, { x, win.getY(), mw + 2, win.getHeight() }, mf, look.accent, juce::Justification::centredLeft);
+    vui::glowText(g, sub, { x + mw + 14, win.getY() + 1, sw + 2, win.getHeight() }, sf, look.accent.withMultipliedBrightness(.85f), juce::Justification::centredLeft);
+}
+void TimeReadout::mouseDown(const juce::MouseEvent& e) {
+    int d = e.x < 36 ? -1 : e.x > getWidth() - 36 ? 1 : 0;
+    if (d == 0) return;
+    bool sync = proc.value("sync") > .5f;
+    auto* prm = proc.state.getParameter(sync ? "division" : "time");
+    float v = sync ? juce::jlimit(0.f, 17.f, proc.value("division") + (float) d) : juce::jlimit(1.f, 2000.f, proc.value("time") + 10.f * (float) d);
+    prm->beginChangeGesture(); prm->setValueNotifyingHost(prm->convertTo0to1(v)); prm->endChangeGesture();
+}
+
+void PushButton::paint(juce::Graphics& g) {
+    auto r = getLocalBounds().toFloat().reduced(2);
+    g.setColour(juce::Colours::black.withAlpha(.6f)); g.fillRoundedRectangle(r.translated(0, down ? 1.f : 3.f), 4);
+    if (down) r.translate(0, 1.5f);
+    juce::ColourGradient body(juce::Colour(0xff4a4a4e), 0, r.getY(), juce::Colour(0xff1d1d20), 0, r.getBottom(), false);
+    g.setGradientFill(body); g.fillRoundedRectangle(r, 4);
+    g.setColour(juce::Colours::white.withAlpha(.18f)); g.drawHorizontalLine((int) r.getY() + 1, r.getX() + 3, r.getRight() - 3);
+    g.setColour(juce::Colours::black); g.drawRoundedRectangle(r, 4, 1.2f);
+    drawLabel(g, text, r, 15, ink, juce::Justification::centred, .08f, true);
+}
+
+Switch::Switch(DelayProcessor& p, DelayLook& l, const char* id, bool lp)
+    : look(l), lamp(lp), attach(*p.state.getParameter(id), [this](float x) { on = x > .5f; repaint(); }, nullptr) {
+    setMouseCursor(juce::MouseCursor::PointingHandCursor);
+    attach.sendInitialUpdate();
+}
+void Switch::paint(juce::Graphics& g) {
+    auto r = getLocalBounds().toFloat();
+    auto c = r.getCentre();
+    if (lamp) {
+        float R = std::min(r.getWidth(), r.getHeight()) / 2 - 1;
+        juce::ColourGradient bez(juce::Colour(0xffb0b0b0), c.x, c.y - R, juce::Colour(0xff2a2a2a), c.x, c.y + R, false);
+        g.setGradientFill(bez); g.fillEllipse(c.x - R, c.y - R, R * 2, R * 2);
+        float j = R * .74f;
+        auto glow = look.accent;
+        juce::Colour hot = on ? glow.withMultipliedBrightness(.45f) : glow.brighter(.4f), core = on ? glow.withMultipliedBrightness(.2f) : glow.withMultipliedBrightness(.8f);
+        juce::ColourGradient jewel(hot, c.x, c.y, core.darker(.6f), c.x + j, c.y + j, true);
+        g.setGradientFill(jewel); g.fillEllipse(c.x - j, c.y - j, j * 2, j * 2);
+        for (int i = 0; i < 6; ++i) { float a = (float) i * juce::MathConstants<float>::pi / 3; g.setColour(juce::Colours::white.withAlpha(.12f)); g.drawLine(c.x, c.y, c.x + j * std::cos(a), c.y + j * std::sin(a), .8f); }
+        g.setColour(juce::Colours::white.withAlpha(.45f)); g.fillEllipse(c.x - j * .5f, c.y - j * .6f, j * .45f, j * .3f);
+        g.setColour(juce::Colours::black.withAlpha(.8f)); g.drawEllipse(c.x - j, c.y - j, j * 2, j * 2, 1);
+        return;
+    }
+    // Toggle: chrome nut and a bat lever, up = on.
+    float R = r.getWidth() / 2 - 1;
+    juce::ColourGradient nut(juce::Colour(0xffd0d0d0), c.x - R * .4f, c.y - R * .5f, juce::Colour(0xff2c2c2c), c.x + R, c.y + R, true);
+    g.setColour(juce::Colours::black.withAlpha(.6f)); g.fillEllipse(c.x - R, c.y - R + 2, R * 2, R * 2);
+    g.setGradientFill(nut); g.fillEllipse(c.x - R, c.y - R, R * 2, R * 2);
+    g.setColour(juce::Colour(0xff111111)); g.fillEllipse(c.x - R * .45f, c.y - R * .45f, R * .9f, R * .9f);
+    float tip = on ? r.getY() + 3 : r.getBottom() - 3;
+    juce::Path lever; lever.startNewSubPath(c.x - 2.5f, c.y); lever.lineTo(c.x - 4, tip); lever.lineTo(c.x + 4, tip); lever.lineTo(c.x + 2.5f, c.y); lever.closeSubPath();
+    juce::ColourGradient lm(juce::Colour(0xffeeeeee), c.x - 4, 0, juce::Colour(0xff666666), c.x + 4, 0, false);
+    g.setGradientFill(lm); g.fillPath(lever);
+    g.setColour(juce::Colour(0xffdddddd)); g.fillEllipse(c.x - 4.5f, tip - 4.5f, 9, 9);
+    g.setColour(juce::Colours::black.withAlpha(.5f)); g.drawEllipse(c.x - 4.5f, tip - 4.5f, 9, 9, .8f);
 }
 
 void Panel::paint(juce::Graphics& g) {
     g.drawImageAt(woodL, 0, 0); g.drawImageAt(woodR, (int) X0 + 1000, 0);
     g.drawImageAt(metal, (int) X0, 0);
     auto face = juce::Rectangle<float>(X0, 0, 1000, (float) H);
-    g.setColour(juce::Colours::black.withAlpha(.18f)); g.fillRect(face.withHeight(58));
-    g.setColour(lineDark); g.drawHorizontalLine(58, X0, X0 + 1000);
-    g.setColour(juce::Colours::white.withAlpha(.04f)); g.drawHorizontalLine(59, X0, X0 + 1000);
-    vui::brand(g, logo, X0 + 24, 11);
-    g.setColour(dim.withAlpha(.5f)); g.drawVerticalLine((int) X0 + 210, 14, 46);
-    drawLabel(g, "VINTAGE DELAY", { X0 + 228, 12, 420, 34 }, 27, ink, juce::Justification::centredLeft, .12f, true);
-    drawLabel(g, hint, { X0 + 240, 418, 260, 26 }, 11.5f, dim, juce::Justification::centredLeft, .04f);
-    vui::groove(g, X0 + 20, X0 + 980, 224);
-
-    g.setColour(juce::Colours::black.withAlpha(.25f)); g.fillRect(X0, stripY, 1000.f, 34.f);
-    g.setColour(lineDark); g.drawHorizontalLine((int) stripY, X0, X0 + 1000);
-    g.setColour(juce::Colours::white.withAlpha(.04f)); g.drawHorizontalLine((int) stripY + 1, X0, X0 + 1000);
-    drawLabel(g, juce::String::fromUTF8("R\xc3\x89GLAGES AVANC\xc3\x89S"), { X0 + 40, stripY, 300, 34 }, 12.5f, ink, juce::Justification::centredLeft, .2f, true);
-    g.setColour(juce::Colours::black.withAlpha(.28f)); g.fillRect(X0, stripY + 34, 1000.f, (float) H - stripY - 34);
-    static const char* heads[4] { "FILTRES", "BANDE", "DUCKING", "ST\xc3\x89R\xc3\x89O" };
-    float unit = (940 - 42) / 9.f, gx = X0 + 30;
-    for (int gi = 0; gi < 4; ++gi) {
-        auto r = juce::Rectangle<float>(gx, advY, unit * (float) weights[gi], advH);
-        vui::plate(g, r, juce::String::fromUTF8(heads[gi]));
-        gx += r.getWidth() + 14;
+    // Brand and title.
+    g.setColour(ink); g.drawImageWithin(logo, (int) X0 + 50, 32, 54, 50, juce::RectanglePlacement::centred, true);
+    drawLabel(g, "SWELL", { X0 + 116, 34, 140, 28 }, 27, ink, juce::Justification::centredLeft, .06f, true);
+    drawLabel(g, "A U D I O", { X0 + 118, 62, 140, 16 }, 12.5f, ink, juce::Justification::centredLeft, .3f);
+    g.setColour(ink.withAlpha(.6f)); g.fillRect(X0 + 228, 30.f, 1.5f, 52.f);
+    {
+        juce::Graphics::ScopedSaveState ss(g);
+        g.addTransform(juce::AffineTransform::scale(.62f, 1).translated(X0 + 250, 0));
+        drawLabel(g, "VINTAGE DELAY", { 0, 26, 520, 56 }, 50, ink, juce::Justification::centredLeft, .02f, true);
     }
+    // Lower strip.
+    g.setColour(juce::Colours::black.withAlpha(.32f)); g.fillRect(X0, stripY, 1000.f, (float) H - stripY);
+    g.setColour(lineDark); g.fillRect(X0, stripY - 1, 1000.f, 2.f);
+    g.setColour(juce::Colours::white.withAlpha(.07f)); g.drawHorizontalLine((int) stripY + 1, X0, X0 + 1000);
+    for (float x : { 187.f, 343.f, 513.f, 642.f, 826.f }) {
+        g.setColour(juce::Colours::black.withAlpha(.6f)); g.fillRect(X0 + x, stripY + 30, 1.f, 76.f);
+        g.setColour(juce::Colours::white.withAlpha(.06f)); g.fillRect(X0 + x + 1, stripY + 30, 1.f, 76.f);
+    }
+    drawLabel(g, "SYNC", { X0 + 650, 514, 52, 30 }, 14.5f, ink, juce::Justification::centredRight, .06f, true);
+    bool sync = proc.value("sync") > .5f;
+    auto lamp = juce::Rectangle<float>(X0 + 742, 524, 11, 11);
+    g.setColour(look.accent.withAlpha(sync ? .3f : 0.f)); g.fillEllipse(lamp.expanded(4));
+    g.setColour(sync ? look.accent : look.accent.withMultipliedBrightness(.25f)); g.fillEllipse(lamp);
+    drawLabel(g, juce::String(juce::roundToInt(proc.bpm.load())) + " BPM", { X0 + 758, 514, 70, 30 }, 14, ink, juce::Justification::centredLeft, .04f);
+    drawLabel(g, "BYPASS", { X0 + 893, 514, 80, 30 }, 15, ink, juce::Justification::centredLeft, .08f, true);
+    drawLabel(g, "v" JucePlugin_VersionString "  /  by @sevyondatracks", { X0 + 700, (float) H - 19, 262, 14 }, 10, dim.withAlpha(.8f), juce::Justification::centredRight, .04f);
     g.setColour(juce::Colours::black); g.drawRect(face, 1);
-    for (auto pt : { juce::Point<float>(X0 + 12, 12), { X0 + 988, 12 }, { X0 + 12, (float) H - 12 }, { X0 + 988, (float) H - 12 } }) vui::screw(g, pt.x, pt.y);
+    for (auto pt : { juce::Point<float>(X0 + 18, 18), { X0 + 982, 18 }, { X0 + 18, (float) H - 18 }, { X0 + 982, (float) H - 18 } }) vui::screw(g, pt.x, pt.y);
 }
 
 void Panel::timerCallback() {
     bool sync = proc.value("sync") > .5f;
     divisionKnob->setVisible(sync); msKnob->setVisible(!sync);
-    juce::String h = sync ? "= " + juce::String(juce::roundToInt(proc.delaySeconds.load() * 1000)) + juce::String::fromUTF8(" ms \xc3\xa0 ") + juce::String(juce::roundToInt(proc.bpm.load())) + " BPM"
-                          : juce::String("libre, sans tempo");
-    if (h != hint) { hint = h; repaint((int) X0 + 240, 418, 260, 26); }
+    juce::String m = sync ? juce::String(swell::divisions[(size_t) juce::jlimit(0, 17, (int) proc.value("division"))].name) : ms(proc.value("time"));
+    juce::String sb = sync ? ms(proc.delaySeconds.load() * 1000) : juce::String();
+    if (m != timeReadout.main || sb != timeReadout.sub) { timeReadout.main = m; timeReadout.sub = sb; timeReadout.repaint(); }
+    juce::String h = juce::String((int) sync) + juce::String(juce::roundToInt(proc.bpm.load()));
+    if (h != hint) { hint = h; repaint((int) X0 + 640, 505, 190, 50); }
     echo.tick();
     refreshNames();
 }
@@ -574,9 +723,8 @@ void Panel::refreshNames() {
     int pr = (int) proc.value("program");
     juce::String cat = utf8(categories[(size_t) categoryOf(pr)]);
     juce::String name = proc.userPresetName.isNotEmpty() ? proc.userPresetName
-                                                          : juce::String(positionInCategory(pr) + 1).paddedLeft('0', 2) + " " + utf8(presets[(size_t) pr].name);
+                                                          : utf8(presets[(size_t) pr].name);
     if (proc.userPresetName.isNotEmpty()) cat = "Mes presets";
-    if (cat != categoryBox.label) { categoryBox.label = cat; categoryBox.repaint(); }
     if (name != presetBox.label) { presetBox.label = name; presetBox.repaint(); }
 }
 
@@ -585,8 +733,8 @@ void Panel::stepCategory(int d) {
     proc.loadPreset(presetIndex(c, 0)); refreshNames();
 }
 void Panel::stepPreset(int d) {
-    int pr = (int) proc.value("program"), c = categoryOf(pr), n = presetsIn(c);
-    proc.loadPreset(presetIndex(c, (positionInCategory(pr) + d + n) % n)); refreshNames();
+    int n = (int) presets.size();
+    proc.loadPreset(((int) proc.value("program") + d + n) % n); refreshNames();
 }
 void Panel::categoryMenu() {
     juce::PopupMenu m; m.setLookAndFeel(&look);
@@ -638,15 +786,21 @@ void Panel::folderMenu() {
 //============================================================================== Editor
 DelayEditor::DelayEditor(DelayProcessor& p) : AudioProcessorEditor(p), panel(p) {
     addAndMakeVisible(panel);
-    panel.onScale = [this](float s) { scale = s; setSize(juce::roundToInt(Panel::W * s), juce::roundToInt(Panel::H * s)); };
     juce::PropertiesFile::Options o;
     o.applicationName = "Swell Delay"; o.filenameSuffix = ".settings"; o.folderName = "Swell Audio"; o.osxLibrarySubFolder = "Application Support";
     juce::PropertiesFile props(o);
-    scale = juce::jlimit(.75f, 1.5f, (float) props.getDoubleValue("scale", 1.0));
-    panel.setScaleShown(scale);
+    scale = juce::jlimit(.6f, 2.f, (float) props.getDoubleValue("scale", 1.0));
+    panel.onScale = [this](float s) { setSize(juce::roundToInt(Panel::W * s), juce::roundToInt(Panel::H * s)); };
+    setResizable(true, true);
+    setResizeLimits(juce::roundToInt(Panel::W * .6f), juce::roundToInt(Panel::H * .6f), Panel::W * 2, Panel::H * 2);
+    getConstrainer()->setFixedAspectRatio((double) Panel::W / Panel::H);
     setSize(juce::roundToInt(Panel::W * scale), juce::roundToInt(Panel::H * scale));
+    ready = true;
+    resized();
 }
 void DelayEditor::resized() {
+    scale = (float) getWidth() / (float) Panel::W;
     panel.setBounds(0, 0, Panel::W, Panel::H);
     panel.setTransform(juce::AffineTransform::scale(scale));
+    if (ready) panel.rememberScale(scale);
 }

@@ -77,7 +77,7 @@ inline void presetDisplay(juce::Graphics& g, juce::Rectangle<float> r, const juc
 }
 
 // Chrome knob. small: no knurled skirt shadow depth, fewer ticks.
-inline void knob(juce::Graphics& g, juce::Rectangle<float> r, float pos, float start, float end, bool small, bool bipolar, juce::Colour light) {
+inline void knob(juce::Graphics& g, juce::Rectangle<float> r, float pos, float start, float end, bool small, bool bipolar, juce::Colour light, bool showArc = true) {
     using juce::MathConstants;
     const float size = std::min(r.getWidth(), r.getHeight());
     const auto c = r.getCentre();
@@ -85,7 +85,7 @@ inline void knob(juce::Graphics& g, juce::Rectangle<float> r, float pos, float s
     const float tickIn = outer - (small ? 5.f : 8.f);
     const float arcR = tickIn - 3.f;
     const float skirtR = arcR - (small ? 3.f : 4.f);
-    const float capR = skirtR * (small ? .76f : .74f);
+    const float capR = skirtR * (small ? .76f : (showArc ? .74f : .66f));
     const float angle = start + pos * (end - start);
     auto at = [&](float a, float rad) { return juce::Point<float>(c.x + rad * std::sin(a), c.y - rad * std::cos(a)); };
 
@@ -101,7 +101,7 @@ inline void knob(juce::Graphics& g, juce::Rectangle<float> r, float pos, float s
     }
     // Value arc, thin and warm.
     float from = bipolar ? (start + end) / 2 : start;
-    if (std::abs(angle - from) > .01f) {
+    if (showArc && std::abs(angle - from) > .01f) {
         juce::Path arc; arc.addCentredArc(c.x, c.y, arcR, arcR, 0, std::min(from, angle), std::max(from, angle), true);
         g.setColour(light.withAlpha(.18f)); g.strokePath(arc, juce::PathStrokeType(small ? 4.f : 5.f, juce::PathStrokeType::curved, juce::PathStrokeType::rounded));
         g.setColour(light.withAlpha(.9f)); g.strokePath(arc, juce::PathStrokeType(small ? 1.6f : 2.f, juce::PathStrokeType::curved, juce::PathStrokeType::rounded));

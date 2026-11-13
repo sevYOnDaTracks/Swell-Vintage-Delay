@@ -24,6 +24,7 @@ public:
     void resized() override;
     void paint(juce::Graphics&) override;
     juce::Slider slider;
+    bool readout = true, strip = false; // strip: label only, value shown while touched
 private:
     DelayLook& look;
     juce::String label;
@@ -78,7 +79,7 @@ private:
 
 class IconButton : public juce::Component {
 public:
-    enum Kind { Save, Folder, Settings, Help };
+    enum Kind { Save, Folder, Settings, Help, Advanced };
     IconButton(Kind k, DelayLook& l) : kind(k), look(l) { setMouseCursor(juce::MouseCursor::PointingHandCursor); }
     std::function<void()> onClick;
     bool active = false;
@@ -89,6 +90,51 @@ public:
 private:
     Kind kind;
     DelayLook& look;
+};
+
+// "1/4  500 ms" between two arrows under the TIME knob.
+class TimeReadout : public juce::Component {
+public:
+    TimeReadout(DelayProcessor& p, DelayLook& l) : proc(p), look(l) {}
+    void paint(juce::Graphics&) override;
+    void mouseDown(const juce::MouseEvent&) override;
+    juce::String main, sub;
+private:
+    DelayProcessor& proc;
+    DelayLook& look;
+};
+
+// Raised push button (TAP).
+class PushButton : public juce::Component {
+public:
+    explicit PushButton(juce::String t) : text(std::move(t)) { setMouseCursor(juce::MouseCursor::PointingHandCursor); }
+    std::function<void()> onClick;
+    void paint(juce::Graphics&) override;
+    void mouseDown(const juce::MouseEvent&) override { down = true; repaint(); if (onClick) onClick(); }
+    void mouseUp(const juce::MouseEvent&) override { down = false; repaint(); }
+private:
+    juce::String text;
+    bool down = false;
+};
+
+// Chrome toggle switch (SYNC) or amber jewel lamp (BYPASS), bound to a bool parameter.
+class Switch : public juce::Component {
+public:
+    Switch(DelayProcessor&, DelayLook&, const char* paramId, bool lamp);
+    void paint(juce::Graphics&) override;
+    void mouseDown(const juce::MouseEvent&) override { attach.setValueAsCompleteGesture(on ? 0.f : 1.f); }
+    bool on = false;
+private:
+    DelayLook& look;
+    bool lamp;
+    juce::ParameterAttachment attach;
+};
+
+// Drawer with the less used controls: mode, SPACE, filters, ducking, stereo.
+class AdvancedPanel : public juce::Component {
+public:
+    void paint(juce::Graphics&) override;
+    void mouseDown(const juce::MouseEvent&) override {}
 };
 
 // Gear panel: five ready-made colours, a free colour for the face and for the lights, and the interface size.
@@ -125,19 +171,27 @@ public:
     void setScaleShown(float s);
     void showColours(bool);
     void filmTick() { timerCallback(); }
-    static constexpr int W = 1068, H = 646;
+    static constexpr int W = 1068, H = 602;
+    void rememberScale(float s) { scale = s; colours.setTheme(theme, s); props->setValue("scale", (double) s); props->saveIfNeeded(); }
 private:
     DelayProcessor& proc;
     DelayLook look;
     Theme theme;
     float scale = 1;
     juce::Image logo, woodL, woodR, metal;
-    std::unique_ptr<Knob> divisionKnob, msKnob, feedback, mix, spaceAmount;
+    std::unique_ptr<Knob> divisionKnob, msKnob, feedback, mix, spaceAmount, drive, tone, wowKnob;
     std::vector<std::unique_ptr<Knob>> advKnobs;
-    std::unique_ptr<Segmented> syncSeg, modeSeg, spaceButton;
+    std::unique_ptr<Segmented> modeSeg, spaceButton;
+    TimeReadout timeReadout { proc, look };
+    PushButton tap { "TAP" };
+    std::unique_ptr<Switch> syncSwitch, bypass;
+    AdvancedPanel adv;
+    std::vector<double> taps;
+    void tapTempo();
+    void showAdvanced(bool);
     PresetBox categoryBox { look }, presetBox { look };
     EchoDisplay echo { proc, look };
-    IconButton save { IconButton::Save, look }, folder { IconButton::Folder, look }, settings { IconButton::Settings, look }, help { IconButton::Help, look };
+    IconButton save { IconButton::Save, look }, folder { IconButton::Folder, look }, settings { IconButton::Settings, look }, help { IconButton::Help, look }, advIcon { IconButton::Advanced, look };
     ColourPanel colours { look };
     std::unique_ptr<juce::FileChooser> chooser;
     juce::String hint;
@@ -160,5 +214,6 @@ public:
     void resized() override;
 private:
     Panel panel;
+    bool ready = false;
     float scale = 1;
 };
